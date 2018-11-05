@@ -14,6 +14,11 @@ int speaker = 26;       // Tone pin
 
 // NOTE: Transceiver pins connected to SPI bus
 
+// Card reader connections: 
+// RED:   N/O
+// WHITE: N/C
+// BLACK: COM
+
 RF24 radio(9,53);
 
 int machineState = 0; // data to be sent to pi; 1:machine enabled, 0:machine disabled
@@ -48,12 +53,14 @@ void loop() {
   if( (!digitalRead(cardReaderIn)) && (!digitalRead(limitSwitchIn)) ){ 
         
     digitalWrite(led1,HIGH);     // Signal LED, student has access and has card inserted
+    digitalWrite(led3,LOW);
     Serial.print("\nCard reader signal detected\n");
     delay(5); // short delay for next limit switch check
     
     while(!digitalRead(limitSwitchIn)) { // While card inserted
       
       if(!digitalRead(enableButton)) { // If enable pressed
+        digitalWrite(relayOut,HIGH);
         digitalWrite(led2,HIGH);
         Serial.print("\nEnable button pressed\n");
 
@@ -65,6 +72,7 @@ void loop() {
       }
       
       else if(!digitalRead(disableButton)) { // If disable pressed
+        digitalWrite(relayOut,LOW);
         digitalWrite(led2,LOW);
         Serial.print("\nDisable button pressed\n");
 
@@ -80,14 +88,19 @@ void loop() {
   }
   
   else {
+    digitalWrite(relayOut,LOW);
     digitalWrite(led1,LOW);
     digitalWrite(led2,LOW);
+    digitalWrite(led3,LOW);
+
+    machineState = 0;
     //Serial.print("\n...nothin' detected...\n");
   }
 
   // if student removed card while machine enabled
   if(machineState) {
     count = 0;
+    digitalWrite(led3,HIGH);
 
     // while card not inserted 
     while(digitalRead(limitSwitchIn) && (count < 15)) {
@@ -102,7 +115,9 @@ void loop() {
     // if max count reached w/o inserting card
     if(count == 15) {
       machineState = 0; 
+      digitalWrite(relayOut,LOW);
       digitalWrite(led2,LOW);
+      digitalWrite(led3,LOW);
       Serial.print("\nTurning off machine\n");
 
       //radio.write(&machineState,sizeof(message));
