@@ -1,5 +1,7 @@
 #include <SPI.h>
 #include <RF24.h>
+#include <printf.h>
+#include "nRF24L01.h"
 
 // Pin connections:
 int cardReaderIn = 41;  // Digital In, active low
@@ -22,35 +24,36 @@ int speaker = 26;       // Tone pin
 // Initialize Radio
 RF24 radio(9,53);
 
-String machine_name = "Machine1"	// Machine name
-int machineState = 0;		// 1:machine enabled, 0:machine disabled
-int count = 0; 						// used when card removed while machine enabled
+int machine_name = 1;  // Machine name
+int machineState = 0;   // 1:machine enabled, 0:machine disabled
+int count = 0;            // used when card removed while machine enabled
+char messageOn[7] = "00\t1";
+char messageOff[7] = "00\t0";
 
-struct PAY_LOAD {
-	char name[];	//machine
-	int state;	//state (on/off)(1/0)
-};
 
 void setup() {
-	Serial.begin(9600);
-	radio.begin();
+  Serial.begin(9600);
+  radio.begin();
 
-	// Assign input pins
-	pinMode(cardReaderIn,INPUT);
-	pinMode(limitSwitchIn,INPUT_PULLUP);
-	pinMode(enableButton,INPUT_PULLUP);
-	pinMode(disableButton,INPUT_PULLUP);
+  // Assign input pins
+  pinMode(cardReaderIn,INPUT);
+  pinMode(limitSwitchIn,INPUT_PULLUP);
+  pinMode(enableButton,INPUT_PULLUP);
+  pinMode(disableButton,INPUT_PULLUP);
 
-	// Assign output pins
-	pinMode(relayOut,OUTPUT);
-	pinMode(led1,OUTPUT);
-	pinMode(led2,OUTPUT);
-	pinMode(led3,OUTPUT);
+  // Assign output pins
+  pinMode(relayOut,OUTPUT);
+  pinMode(led1,OUTPUT);
+  pinMode(led2,OUTPUT);
+  pinMode(led3,OUTPUT);
 
-	radio.openWritingPipe(0xF0F0F0F0E1);
-	radio.stopListening();
+  radio.openWritingPipe(0xF0F0F0F0E1);
+  radio.openReadingPipe(1,0xF0F0F0F0D2);
+  radio.stopListening();
 
-	Serial.print("\n\nHello c:\n");
+  printf_begin();
+  radio.printDetails();
+  Serial.print("\n\nHello c:\n");
 
 }
 
@@ -66,7 +69,7 @@ void loop() {
     
     while(!digitalRead(limitSwitchIn)) { // While card inserted
       
-      if(!digitalRead(enableButton)) { // If enable pressed
+      if(!digitalRead(enableButton) && !machineState) { // If enable pressed 
         digitalWrite(relayOut,HIGH);
         digitalWrite(led2,HIGH);
         Serial.print("\nEnable button pressed\n");
@@ -75,42 +78,40 @@ void loop() {
         machineState = 1;
         
         if(sendPayLoad(machineState)){
-        	//sent good
-          Serial.print("sent payload");
+          //sent good
+          Serial.print("\nsent payload");
         }
         else
         {
-        	//failed
+          //failed
+          Serial.print("\npayload failed to send");
         }
-        
+    
         //radio.write(message, message_size);
-        
         delay(500);
       }
       
-      else if(!digitalRead(disableButton)) { // If disable pressed
+      else if((!digitalRead(disableButton)) && machineState) { // If disable pressed
         digitalWrite(relayOut,LOW);
         digitalWrite(led2,LOW);
         Serial.print("\nDisable button pressed\n");
 
-        Serial.print("\nWriting to Pi");
+        Serial.print("\nWriting to Pi\n");
         machineState = 0;
-		
-		
-		if(sendPayLoad(machineState)){
+    
+    if(sendPayLoad(machineState)){
       //sent good
-      Serial.print("sent payload");
+      Serial.print("\nsent payload\n");
     }
     else
     {
-      //failed
+      //send failed
+      Serial.print("\npayload failed to send\n");
     }
-        
+
     delay(500);
     }
-      
   }
-
 }
   
   else {
@@ -140,35 +141,35 @@ void loop() {
 
     // if max count reached w/o inserting card
     if(count == 15) {
-      	machineState = 0; 
-      	digitalWrite(relayOut,LOW);
-      	digitalWrite(led2,LOW);
-      	digitalWrite(led3,LOW);
-      	Serial.print("\nTurning off machine\n");
+        machineState = 0; 
+        digitalWrite(relayOut,LOW);
+        digitalWrite(led2,LOW);
+        digitalWrite(led3,LOW);
+        Serial.print("\nTurning off machine\n");
       
-      	if(sendPayLoad(machineState)){
-        	//sent good
-          Serial.print("sent payload");
+        if(radio.write(&machineState, sizeof(machineState))){
+          //sent good
+          Serial.print("\nsent payload\n");
         }
         else
         {
-        	//failed
+          //failed
+          Serial.print("\npayload failed to send\n");
         }
-        
-    	//radio.write(message, message_size);
+      //radio.write(message, message_size);
     }
   }
-
   //delay(500);
-  
 }
 
-boolean sendPayLoad(boolean val)
+boolean sendPayLoad(int val)
 {
-	// Create struct
-	PAY_LOAD data;
-	data.name = machine_name
-	data.state = val
-	
-  return(radio.write(data, sizeof(PAY_LOAD)));
+  if(val) {
+    Serial.print("\nSending payload\n");
+  return(radio.write(&messageOn, sizeof(messageOn)));
+  }
+  else {
+    Serial.print("\nSending payload\n");
+  return(radio.write(&messageOff, sizeof(messageOff)));
+  }
 }
