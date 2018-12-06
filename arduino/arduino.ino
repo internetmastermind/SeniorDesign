@@ -147,7 +147,7 @@ void loop() {
         digitalWrite(led3,LOW);
         Serial.print("\nTurning off machine\n");
       
-        if(radio.write(&machineState, sizeof(machineState))){
+        if(sendPayLoad(machineState)){
           //sent good
           Serial.print("\nsent payload\n");
         }
